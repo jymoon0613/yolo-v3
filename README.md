@@ -1,4 +1,4 @@
-# YOLOv3 in PyTorch
+# YOLO-v3
 
 ## About Repository
 
@@ -9,6 +9,8 @@ To see my review comments, you need to add the ***Better Comments*** extension i
 This code was pulled from [here](https://github.com/aladdinpersson/Machine-Learning-Collection).
 
 The README for the original repository is below:
+
+## YOLOv3 in PyTorch
 
 A quite minimal implementation of YOLOv3 in PyTorch spanning only around 800 lines of code related to YOLOv3 (not counting plot image helper functions etc). The repository has support for training and evaluation and complete with helper functions for inference. There is currently pretrained weights for Pascal-VOC with MS COCO coming up. 
 
