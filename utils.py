@@ -19,12 +19,24 @@ def iou_width_height(boxes1, boxes2):
     Returns:
         tensor: Intersection over union of the corresponding boxes
     """
+
+    # ! 두 bbox의 normalied width, height만을 사용하여 IoU 계산
+    # ! 두 bbox의 중심좌표는 동일하다고 가정한다면, normalied width, height로 쉽게 IoU를 계산할 수 있음
+    # ! boxes1 = (2,)  -> 선택된 gt bbox의 normalied width, height
+    # ! boxes2 = (9,2) -> 9개 anchor boxes의 normalied width, height
+
+    # ! 먼저 intersection 계산
     intersection = torch.min(boxes1[..., 0], boxes2[..., 0]) * torch.min(
         boxes1[..., 1], boxes2[..., 1]
-    )
+    ) # ! (9,) -> 선택된 gt bbox와 9개의 anchor bboxes와의 intersection이 계산됨
+
+    # ! union 계산
     union = (
         boxes1[..., 0] * boxes1[..., 1] + boxes2[..., 0] * boxes2[..., 1] - intersection
-    )
+    ) # ! (9,)
+
+    # ! intersection / union = (9,) -> 선택된 gt bbox와 9개의 anchor bboxes와의 IoU가 계산되어 출력됨
+
     return intersection / union
 
 

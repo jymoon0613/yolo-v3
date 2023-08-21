@@ -31,16 +31,24 @@ class YOLODataset(Dataset):
         C=20,
         transform=None,
     ):
+        # ! 정의된 anchors
+        # ! ANCHORS = [
+        # ! [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
+        # ! [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+        # ! [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
+        # ! ]
+        # ! anchor box의 width, height가 0-1로 normalize되어 있음
+
         self.annotations = pd.read_csv(csv_file)
         self.img_dir = img_dir
         self.label_dir = label_dir
-        self.image_size = image_size
+        self.image_size = image_size # ! 416
         self.transform = transform
-        self.S = S
-        self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])  # for all 3 scales
-        self.num_anchors = self.anchors.shape[0]
-        self.num_anchors_per_scale = self.num_anchors // 3
-        self.C = C
+        self.S = S # ! [IMAGE_SIZE // 32, IMAGE_SIZE // 16, IMAGE_SIZE // 8] = [416 // 32, 416 // 16, 416 // 8] = [13, 26, 52]
+        self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])  # ! (9, 2)
+        self.num_anchors = self.anchors.shape[0] # ! 9
+        self.num_anchors_per_scale = self.num_anchors // 3 # ! 9 // 3 = 3
+        self.C = C # ! 클래스 개수 = 20
         self.ignore_iou_thresh = 0.5
 
     def __len__(self):
@@ -58,12 +66,26 @@ class YOLODataset(Dataset):
             bboxes = augmentations["bboxes"]
 
         # Below assumes 3 scale predictions (as paper) and same num of anchors per scale
+        # ! 주어진 이미지에 대한 예측 targets 생성
+        # ! FPN을 사용하여 3개의 scale에서 예측을 수행하기 때문에 3개의 targets가 필요함
         targets = [torch.zeros((self.num_anchors // 3, S, S, 6)) for S in self.S]
+        # ! targets = [[3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6]] = (3, 3, 13, 13, 6)
         for box in bboxes:
+            
+            # ! 현재 선택된 gt bbox와 anchor bboxes와의 iou를 계산
+            # ! gt bbox의 좌표는 0-1로 normalized되어 있음
+            # ! width와 height만을 이용하여 iou 계산
+            # ! utils.iou_width_height 참고
             iou_anchors = iou(torch.tensor(box[2:4]), self.anchors)
-            anchor_indices = iou_anchors.argsort(descending=True, dim=0)
+            # ! iou_anchors = (9,) -> 선택된 gt bbox와 9개의 anchor bboxes와의 IoU값
+
+            # ! IoU를 기준으로 anchor boxes를 내림차순을 정렬한 indices 생성
+            anchor_indices = iou_anchors.argsort(descending=True, dim=0) # ! (9,)
+
+            # ! gt bbox 정보 추출
             x, y, width, height, class_label = box
             has_anchor = [False] * 3  # each scale should have one anchor
+            # 
             for anchor_idx in anchor_indices:
                 scale_idx = anchor_idx // self.num_anchors_per_scale
                 anchor_on_scale = anchor_idx % self.num_anchors_per_scale

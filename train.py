@@ -24,7 +24,6 @@ warnings.filterwarnings("ignore")
 
 torch.backends.cudnn.benchmark = True
 
-
 def train_fn(train_loader, model, optimizer, loss_fn, scaler, scaled_anchors):
     loop = tqdm(train_loader, leave=True)
     losses = []
@@ -54,9 +53,8 @@ def train_fn(train_loader, model, optimizer, loss_fn, scaler, scaled_anchors):
         mean_loss = sum(losses) / len(losses)
         loop.set_postfix(loss=mean_loss)
 
-
-
 def main():
+    # TODO: 리뷰 시작
     model = YOLOv3(num_classes=config.NUM_CLASSES).to(config.DEVICE)
     optimizer = optim.Adam(
         model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY
@@ -64,6 +62,9 @@ def main():
     loss_fn = YoloLoss()
     scaler = torch.cuda.amp.GradScaler()
 
+    # ! utils.get_loaders 참고
+    # ! dataset.YOLODataset 참고
+    # ! PASCAL VOC를 사용한다고 가정함
     train_loader, test_loader, train_eval_loader = get_loaders(
         train_csv_path=config.DATASET + "/train.csv", test_csv_path=config.DATASET + "/test.csv"
     )
