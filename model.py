@@ -452,7 +452,7 @@ class YOLOv3(nn.Module):
                 route_connections.pop()
 
         # ! outputs = [(B, 3, 13, 13, 25), (B, 3, 26, 26, 25), (B, 3, 52, 52, 25)]
-        # ! -> 3개의 서로 다른 scale의 feature maps(13x13, 26x26, 52x52), 3개의 anchor boxes에 대한 예측값이 담긴 리스트
+        # ! -> 3개의 서로 다른 scale의 feature maps(13x13, 26x26, 52x52)에서 모든 grid cell positions, 모든 3개의 anchor boxes에 대한 예측값이 담긴 리스트
 
         return outputs
 

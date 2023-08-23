@@ -28,13 +28,13 @@ class YoloLoss(nn.Module):
     def forward(self, predictions, target, anchors):
 
         # ! predictions = (B, 3, S, S, 25) -> SxS feature maps에서 예측된 결과
-        # ! target      = (3, S, S, 6)     -> SxS feature maps에 대한 targets
+        # ! target      = (B, 3, S, S, 6)     -> SxS feature maps에 대한 targets
         # ! anchors     = (3, 2)           -> SxS feature maps에 대한 anchor boxes
 
         # Check where obj and noobj (we ignore if target == -1)
-        # ! 모든 positions의 anchors에 target object가 존재하는지의 여부를 식별
-        # ! obj가 True면 object가 존재함을 의미
-        # ! noobj가 True면 object가 존재하지 않음을 의미
+        # ! 모든 positions에서, target object가 할당된 anchor boxes 식별
+        # ! obj가 True면 object가 할당되었음을 의미
+        # ! noobj가 True면 object가 할당되지 않았음을 의미
         obj = target[..., 0] == 1  # in paper this is Iobj_i
         noobj = target[..., 0] == 0  # in paper this is Inoobj_i
 
@@ -46,6 +46,8 @@ class YoloLoss(nn.Module):
         # ! Binary cross entropy 사용
         no_object_loss = self.bce(
             # ! 예측값과 gt_label에서 noobj에 해당하는 confidence score 값만 추출함
+            # ! predictions[..., 0:1][noobj] -> 모든 grid cell positions에서 object가 할당되지 않은 anchor boxes에 대한 모델의 confidence score 예측값
+            # ! target[..., 0:1][noobj]      -> 모든 grid cell positions에서 object가 할당되지 않은 anchor boxes에 대한 gt confidence score 값 (= 0)
             (predictions[..., 0:1][noobj]), (target[..., 0:1][noobj]),
         ) # ! -> scalar loss
 
@@ -53,7 +55,7 @@ class YoloLoss(nn.Module):
         #   FOR OBJECT LOSS    #
         # ==================== #
 
-        # ! Object가 존재하지 않는 경우 confidence score에 대한 loss 계산
+        # ! Object가 존재하는 경우 confidence score에 대한 loss 계산
         # ! Mean squared error 사용
         anchors = anchors.reshape(1, 3, 1, 1, 2)
 
@@ -67,13 +69,16 @@ class YoloLoss(nn.Module):
         box_preds = torch.cat([self.sigmoid(predictions[..., 1:3]), torch.exp(predictions[..., 3:5]) * anchors], dim=-1) # ! (B, 3, S, S, 4)
 
         # ! IoU를 계산함
-        # ! box_preds[obj]        = (n, 4) -> object가 존재하는 n개의 예측 bbox
-        # ! target[..., 1:5][obj] = (n, 4)  -> object가 존재하는 n개의 gt bbox
+        # ! box_preds[obj]        = (n, 4) -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 예측 bbox 좌표
+        # ! target[..., 1:5][obj] = (n, 4) -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 gt_box 좌표
         ious = intersection_over_union(box_preds[obj], target[..., 1:5][obj]).detach()
-        # ! ious = (n,1) n개의 예측 bbox와 gt bbox 간의 IoU가 저장되어 있음
+        # ! ious = (n, 1) n개의 예측 bbox와 gt bbox 간의 IoU가 저장되어 있음
 
         # ! Confidence score에 대한 loss 계산
         # ! Object가 존재하는 경우, target confidence score는 gt bbox와의 IoU 값이 됨
+        # ! self.sigmoid(predictions[..., 0:1][obj]) -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대한 모델의 confidence score 예측값
+        # ! target[..., 0:1][obj]                    -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대한 gt confidence score 값 (= 1)
+        # ! ious * target[..., 0:1][obj]             -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대해 gt bbox와 예측 bbox의 IoU값
         object_loss = self.mse(self.sigmoid(predictions[..., 0:1][obj]), ious * target[..., 0:1][obj]) # ! -> scalar loss
 
         # ======================== #
@@ -94,6 +99,8 @@ class YoloLoss(nn.Module):
 
         # ! Object가 존재하는 경우에 대해서만 bbox loss 계산
         # ! Mean squared error 사용
+        # ! predictions[..., 1:5][obj] -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 예측 bbox label
+        # ! target[..., 1:5][obj]      -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 gt bbox label
         box_loss = self.mse(predictions[..., 1:5][obj], target[..., 1:5][obj]) # ! -> scalar loss
 
         # ================== #
@@ -103,6 +110,8 @@ class YoloLoss(nn.Module):
         # ! Classification loss 계산
         # ! Object가 존재하는 경우에 대해서만 classification loss 계산
         # ! Cross entropy 사용
+        # ! predictions[..., 5:][obj] -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 class 예측값 (one-hot)
+        # ! target[..., 5][obj]       -> 모든 grid cell positions에서 object가 할당된 anchors에 대한 gt class
         class_loss = self.entropy(
             (predictions[..., 5:][obj]), (target[..., 5][obj].long()),
         ) # ! -> scalar loss

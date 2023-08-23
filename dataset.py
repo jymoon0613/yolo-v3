@@ -31,25 +31,50 @@ class YOLODataset(Dataset):
         C=20,
         transform=None,
     ):
-        # ! 정의된 anchor boxes
-        # ! ANCHORS = [
-        # ! [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
-        # ! [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
-        # ! [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
-        # ! ]
-        # ! anchor box의 width, height가 0-1로 normalize되어 있음
-        # ! anchor boxes는 세 가지 scale로 구분되어 있음 (ANCHORS[0], ANCHORS[1], ANCHORS[2])
 
+        # ! 데이터셋 파일 위치 정의
         self.annotations = pd.read_csv(csv_file)
         self.img_dir = img_dir
         self.label_dir = label_dir
+
+        # ! Hyperparameter 설정
+        # ! 이미지 크기
         self.image_size = image_size # ! 416
-        self.transform = transform
-        self.S = S # ! [IMAGE_SIZE // 32, IMAGE_SIZE // 16, IMAGE_SIZE // 8] = [416 // 32, 416 // 16, 416 // 8] = [13, 26, 52]
-        self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])  # ! (9, 2)
+
+        # ! Augmentation list
+        self.transform = transform   # ! config 참조
+
+        # ! 3개의 feature maps의 resolution
+        # ! [IMAGE_SIZE // 32, IMAGE_SIZE // 16, IMAGE_SIZE // 8] = [416 // 32, 416 // 16, 416 // 8] = [13, 26, 52]
+        self.S = S # ! [13, 26, 52]
+
+        # ! 정의된 anchor boxes
+        # ! anchors = 
+        # ! [
+        # !  [(0.28, 0.22), (0.38, 0.48), (0.90, 0.78)],
+        # !  [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
+        # !  [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
+        # ! ] -> (3, 3, 2)
+        # ! anchor box의 width, height가 0-1로 normalize되어 있음
+        # ! anchor boxes는 세 가지 scale로 구분되어 있음 (ANCHORS[0], ANCHORS[1], ANCHORS[2])
+        self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
+        # ! self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2]) = 
+        # ! [
+        # !  (0.28, 0.22), (0.38, 0.48), (0.90, 0.78),
+        # !  (0.07, 0.15), (0.15, 0.11), (0.14, 0.29),
+        # !  (0.02, 0.03), (0.04, 0.07), (0.08, 0.06),
+        # ! ] -> (9, 2)
+
+        # ! anchor boxes의 수
         self.num_anchors = self.anchors.shape[0] # ! 9
-        self.num_anchors_per_scale = self.num_anchors // 3 # ! 9 // 3 = 3
-        self.C = C # ! 클래스 개수 = 20
+
+        # ! scale 별 anchor boxes 개수
+        self.num_anchors_per_scale = self.num_anchors // 3 # ! 3
+
+        # ! 클래스 개수 (PASCAL VOC)
+        self.C = C # ! 20 
+
+        # ! IoU threshold
         self.ignore_iou_thresh = 0.5
 
     def __len__(self):
@@ -72,26 +97,33 @@ class YOLODataset(Dataset):
         # ! 생성 결과를 저장할 list of tensors 선언
         targets = [torch.zeros((self.num_anchors // 3, S, S, 6)) for S in self.S]
         # ! targets = [[3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6]] = (3, 3, 13, 13, 6)
-        for box in bboxes: # ! 이미지 내의 모든 bbox에 대해 반복
 
-            # ! 현재 선택된 gt bbox와 anchor bboxes와의 iou를 계산
-            # ! gt bbox의 좌표는 0-1로 normalized되어 있음
-            # ! width와 height만을 이용하여 iou 계산
+        # ! 이미지 내의 모든 gt_bbox에 대해 반복하면서 target 저장
+        for box in bboxes: 
+
+            # ! 현재 선택된 gt_bbox와 모든 anchor boxes와의 iou를 계산
+            # ! gt_bbox의 좌표는 0-1로 normalized되어 있음
+            # ! 이때 width와 height만을 이용하여 iou 계산
             # ! utils.iou_width_height 참고
+            # ! torch.tensor(box[2:4]) = (2,)
+            # ! self.anchors           = (9, 2)
             iou_anchors = iou(torch.tensor(box[2:4]), self.anchors)
-            # ! iou_anchors = (9,) -> 선택된 gt bbox와 9개의 anchor bboxes와의 IoU값
+            # ! iou_anchors = (9,) -> 선택된 gt_bbox와 9개 anchor boxes와의 IoU값
 
-            # ! IoU를 기준으로 anchor boxes를 내림차순으로 정렬
+            # ! IoU값을 기준으로 anchor boxes를 내림차순으로 정렬
             anchor_indices = iou_anchors.argsort(descending=True, dim=0)
-            # ! anchor_indices = (9,) 내림차순 정렬했을 때의 anchor box indices
+            # ! anchor_indices = (9,) -> IoU값을 기준으로 내림차순 정렬했을 때의 anchor box indices
 
-            # ! gt bbox 정보 추출
+            # ! gt_bbox 정보 추출
             x, y, width, height, class_label = box
-            # ! gt bbox는 필수적으로 3개의 scale anchor boxes와 대응됨
+
+            # ! gt bbox는 3개의 서로 다른 scale의 feature maps 각각에 할당되는데,
+            # ! 이때 한 scale에서 단 하나의 anchor box에만 할당됨
             has_anchor = [False] * 3  # each scale should have one anchor
             
-            # ! 모든 anchor boxes에 대해 반복하되, 선택된 gt box와의 IoU가 가장 큰 anchor box부터 선택
+            # ! 모든 anchor boxes에 대해 반복하되, 선택된 gt_bbox와의 IoU가 가장 큰 anchor box부터 선택됨
             for anchor_idx in anchor_indices:
+
                 # ! 선택된 anchor box가 어떤 scale range에 속하는지 식별
                 # ! 현재 총 9개의 anchor boxes가 존재하고, 이는 0-2, 3-5, 6-8의 세 가지 scale range로 구분되어 있음
                 # ! 따라서, scale_idx는 0,1,2 중 하나의 값을 가지며, 선택된 anchor box가 어떤 scale에 속하는 anchor인지를 식별함
@@ -108,26 +140,27 @@ class YOLODataset(Dataset):
                 S = self.S[scale_idx]
                 # ! S = [3, S, S, 6] -> SxS resolution의 feature maps를 위해 정의된 target tensor 선택
 
-                # ! gt bbox가 어떤 grid cell에 속하는지 식별
+                # ! gt_box가 어떤 grid cell에 속하는지 식별
                 # ! (i,j)는 SxS의 feature maps(grid cell)의 한 position을 의미함
                 # ! 0 <= i,j <= S-1
                 i, j = int(S * y), int(S * x)  # which cell
 
-                # ! gt box의 position i,j에서 같은 scale, 종류의 anchor box에 대해 target이 할당되었는지를 식별
+                # ! 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 이미 다른 gt_box가 할당되었는지를 식별
                 anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 0]
 
-                # ! 만약 gt box의 position i,j에서 같은 scale, 종류의 anchor box에 대해 target이 할당되지 않았고, 
-                # ! 현재 gt box가 같은 scale에 대한 예측 target이 없는 경우 예측값을 할당
+                # ! 만약 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_box가 할당되지 않았고, (anchor_taken = False)
+                # ! gt_box가 같은 scale range에 속하는 anchor box에 할당되지 않은 경우, (has_anchor[scale_idx] = False)
+                # ! 선택된 anchor box에 예측값을 할당
                 if not anchor_taken and not has_anchor[scale_idx]:
 
-                    # ! position (i,j)에 주어진 anchor box에 대한 object가 존재한다는 것을 지시
+                    # ! grid cell position (i,j)의 주어진 종류의 anchor box에 object가 존재한다는 것을 지시
                     targets[scale_idx][anchor_on_scale, i, j, 0] = 1
 
                     # ! bbox regression 예측 target 생성
-                    # ! x_cell, y_cell은 gt box가 속하는 grid cell에서의 상대적인 위치를 의미 (0-1)
+                    # ! x_cell, y_cell은 gt_box가 속하는 grid cell에서의 상대적인 위치를 의미 (0-1)
                     x_cell, y_cell = S * x - j, S * y - i  # both between [0,1]
 
-                    # ! width_cell, height_cell은 grid cell 기준의 gt box width, height를 의미
+                    # ! width_cell, height_cell은 grid 기준 gt_box의 width, height를 의미
                     width_cell, height_cell = (
                         width * S,
                         height * S,
@@ -137,20 +170,29 @@ class YOLODataset(Dataset):
                     )
 
                     # ! target 값 저장
+                    # ! bbox regression 예측 target 저장
                     targets[scale_idx][anchor_on_scale, i, j, 1:5] = box_coordinates
+
+                    # ! class label 저장
                     targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
+
+                    # ! gt_box가 현재 선택된 anchor box와 동일한 scale range의 anchor boxes에 다시 할당될 수 없도록 명시
                     has_anchor[scale_idx] = True
 
-                # ! 만약 gt box의 position i,j에서 같은 scale, 종류의 anchor box에 대해 target이 할당되지 않았고,
-                # ! gt bbox와의 iou가 
+                # ! 만약 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_box가 할당되지 않았지만, (anchor_taken = False)
+                # ! gt_box가 같은 scale range에 속하는 anchor box에 이미 할당되었고, (has_anchor[scale_idx] = True)
+                # ! gt_box와의 IoU가 특정 threshold(0.5)보다 큰 경우 -1을 할당함
+                # ! 즉 현재 선택된 anchor box보다 gt_box와 더 일치하는 anchor box가 이전에 할당되어 존재하므로 예측 과정에서 고려하지 않음
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_thresh:
                     targets[scale_idx][anchor_on_scale, i, j, 0] = -1  # ignore prediction
+            
+            # ! 반복 결과, 하나의 이미지에 존재하는 모든 gt_box는 세 가지 scale의 feature maps 각각에서 하나의 anchor box에 할당됨
 
         # ! image          = (3, 416, 416) -> 입력 이미지
-        # ! tuple(targets) = ([3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6]) = (3, 3, 13, 13, 6)
-        # ! 3개의 서로 다른 scale의 feature maps와 각각의 세 anchor boxes에 대해,
-        # ! 모든 feature maps(grid cell) positions에서의 예측 targets가
-        # ! (confidence, x, y, w, h, class)의 형태로 저장되어 있음
+        # ! tuple(targets) = ([3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6])
+        # ! -> 3개의 서로 다른 scale의 feature maps와 각각의 서로 다른 종류(3개)의 anchor boxes에 대해,
+        # ! -> 모든 feature maps(grid cell) positions에서의 예측 targets가
+        # ! -> (confidence, x, y, w, h, class)의 형태로 저장되어 있음
 
         return image, tuple(targets)
 
