@@ -29,7 +29,7 @@ class YoloLoss(nn.Module):
 
         # ! predictions = (B, 3, S, S, 25) -> SxS feature maps에서 예측된 결과
         # ! target      = (B, 3, S, S, 6)     -> SxS feature maps에 대한 targets
-        # ! anchors     = (3, 2)           -> SxS feature maps에 대한 anchor boxes
+        # ! anchors     = (3, 2)           -> SxS feature maps에 대한 scaled anchor boxes
 
         # Check where obj and noobj (we ignore if target == -1)
         # ! 모든 positions에서, target object가 할당된 anchor boxes 식별
@@ -78,7 +78,7 @@ class YoloLoss(nn.Module):
         # ! Object가 존재하는 경우, target confidence score는 gt bbox와의 IoU 값이 됨
         # ! self.sigmoid(predictions[..., 0:1][obj]) -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대한 모델의 confidence score 예측값
         # ! target[..., 0:1][obj]                    -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대한 gt confidence score 값 (= 1)
-        # ! ious * target[..., 0:1][obj]             -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대해 gt bbox와 예측 bbox의 IoU값
+        # ! ious * target[..., 0:1][obj]             -> 모든 grid cell positions에서 object가 할당된 anchor boxes에 대해 gt_bbox와 예측 bbox의 IoU값
         object_loss = self.mse(self.sigmoid(predictions[..., 0:1][obj]), ious * target[..., 0:1][obj]) # ! -> scalar loss
 
         # ======================== #

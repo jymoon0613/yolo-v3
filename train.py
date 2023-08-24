@@ -32,7 +32,7 @@ def train_fn(train_loader, model, optimizer, loss_fn, scaler, scaled_anchors):
         # ! x = (B, 3, 416, 416) -> 입력 이미지
         # ! y = ([B, 3, 13, 13, 6], [B, 3, 26, 26, 6], [B, 3, 52, 52, 6])
         # ! -> 3개의 서로 다른 scale의 feature maps와 각각의 세 anchor boxes에 대해, 
-        # ! -> 모든 feature maps(grid cell) positions에서의 예측 targets가
+        # ! -> 모든 feature maps(grid cell) positions에서의 gt targets가
         # ! -> (confidence, x, y, w, h, class)의 형태로 저장되어 있음
 
         x = x.to(config.DEVICE)

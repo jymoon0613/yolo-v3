@@ -42,7 +42,7 @@ class YOLODataset(Dataset):
         self.image_size = image_size # ! 416
 
         # ! Augmentation list
-        self.transform = transform   # ! config 참조
+        self.transform = transform # ! config 참조
 
         # ! 3개의 feature maps의 resolution
         # ! [IMAGE_SIZE // 32, IMAGE_SIZE // 16, IMAGE_SIZE // 8] = [416 // 32, 416 // 16, 416 // 8] = [13, 26, 52]
@@ -96,14 +96,14 @@ class YOLODataset(Dataset):
         # ! FPN을 사용하여 3개의 서로 다른 scale의 feature maps에서 각각 예측을 수행하기 때문에 하나의 이미지마다 총 3개의 targets가 필요함
         # ! 생성 결과를 저장할 list of tensors 선언
         targets = [torch.zeros((self.num_anchors // 3, S, S, 6)) for S in self.S]
-        # ! targets = [[3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6]] = (3, 3, 13, 13, 6)
+        # ! targets = [[3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6]]
 
         # ! 이미지 내의 모든 gt_bbox에 대해 반복하면서 target 저장
         for box in bboxes: 
 
-            # ! 현재 선택된 gt_bbox와 모든 anchor boxes와의 iou를 계산
+            # ! 현재 선택된 gt_bbox와 모든 anchor boxes와의 IoU를 계산
             # ! gt_bbox의 좌표는 0-1로 normalized되어 있음
-            # ! 이때 width와 height만을 이용하여 iou 계산
+            # ! 이때 width와 height만을 이용하여 IoU 계산
             # ! utils.iou_width_height 참고
             # ! torch.tensor(box[2:4]) = (2,)
             # ! self.anchors           = (9, 2)
@@ -117,7 +117,7 @@ class YOLODataset(Dataset):
             # ! gt_bbox 정보 추출
             x, y, width, height, class_label = box
 
-            # ! gt bbox는 3개의 서로 다른 scale의 feature maps 각각에 할당되는데,
+            # ! gt_bbox는 3개의 서로 다른 scale의 feature maps 각각에 할당되는데,
             # ! 이때 한 scale에서 단 하나의 anchor box에만 할당됨
             has_anchor = [False] * 3  # each scale should have one anchor
             
@@ -140,27 +140,27 @@ class YOLODataset(Dataset):
                 S = self.S[scale_idx]
                 # ! S = [3, S, S, 6] -> SxS resolution의 feature maps를 위해 정의된 target tensor 선택
 
-                # ! gt_box가 어떤 grid cell에 속하는지 식별
+                # ! gt_bbox가 어떤 grid cell에 속하는지 식별
                 # ! (i,j)는 SxS의 feature maps(grid cell)의 한 position을 의미함
                 # ! 0 <= i,j <= S-1
                 i, j = int(S * y), int(S * x)  # which cell
 
-                # ! 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 이미 다른 gt_box가 할당되었는지를 식별
+                # ! 현재 선택된 gt_bbox의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 이미 다른 gt_bbox가 할당되었는지를 식별
                 anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 0]
 
-                # ! 만약 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_box가 할당되지 않았고, (anchor_taken = False)
-                # ! gt_box가 같은 scale range에 속하는 anchor box에 할당되지 않은 경우, (has_anchor[scale_idx] = False)
+                # ! 만약 현재 선택된 gt_bbox의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_bbox가 할당되지 않았고, (anchor_taken = False)
+                # ! gt_bbox가 같은 scale range에 속하는 anchor box에 할당되지 않은 경우, (has_anchor[scale_idx] = False)
                 # ! 선택된 anchor box에 예측값을 할당
                 if not anchor_taken and not has_anchor[scale_idx]:
 
                     # ! grid cell position (i,j)의 주어진 종류의 anchor box에 object가 존재한다는 것을 지시
                     targets[scale_idx][anchor_on_scale, i, j, 0] = 1
 
-                    # ! bbox regression 예측 target 생성
+                    # ! bbox regression gt target 생성
                     # ! x_cell, y_cell은 gt_box가 속하는 grid cell에서의 상대적인 위치를 의미 (0-1)
                     x_cell, y_cell = S * x - j, S * y - i  # both between [0,1]
 
-                    # ! width_cell, height_cell은 grid 기준 gt_box의 width, height를 의미
+                    # ! width_cell, height_cell은 grid 기준 gt_bbox의 width, height를 의미
                     width_cell, height_cell = (
                         width * S,
                         height * S,
@@ -170,28 +170,28 @@ class YOLODataset(Dataset):
                     )
 
                     # ! target 값 저장
-                    # ! bbox regression 예측 target 저장
+                    # ! bbox regression gt target 저장
                     targets[scale_idx][anchor_on_scale, i, j, 1:5] = box_coordinates
 
                     # ! class label 저장
                     targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
 
-                    # ! gt_box가 현재 선택된 anchor box와 동일한 scale range의 anchor boxes에 다시 할당될 수 없도록 명시
+                    # ! gt_bbox가 현재 선택된 anchor box와 동일한 scale range의 anchor boxes에 다시 할당될 수 없도록 명시
                     has_anchor[scale_idx] = True
 
-                # ! 만약 현재 선택된 gt_box의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_box가 할당되지 않았지만, (anchor_taken = False)
-                # ! gt_box가 같은 scale range에 속하는 anchor box에 이미 할당되었고, (has_anchor[scale_idx] = True)
-                # ! gt_box와의 IoU가 특정 threshold(0.5)보다 큰 경우 -1을 할당함
-                # ! 즉 현재 선택된 anchor box보다 gt_box와 더 일치하는 anchor box가 이전에 할당되어 존재하므로 예측 과정에서 고려하지 않음
+                # ! 만약 현재 선택된 gt_bbox의 grid cell position i,j에서 현재 선택된 것과 같은 종류의 anchor box에 다른 gt_bbox가 할당되지 않았지만, (anchor_taken = False)
+                # ! gt_bbox가 같은 scale range에 속하는 anchor box에 이미 할당되었고, (has_anchor[scale_idx] = True)
+                # ! gt_bbox와의 IoU가 특정 threshold(0.5)보다 큰 경우 -1을 할당함
+                # ! 즉 현재 선택된 anchor box보다 gt_bbox와 더 일치하는 anchor box가 이전에 할당되어 존재하므로 예측 과정에서 고려하지 않음
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_thresh:
                     targets[scale_idx][anchor_on_scale, i, j, 0] = -1  # ignore prediction
             
-            # ! 반복 결과, 하나의 이미지에 존재하는 모든 gt_box는 세 가지 scale의 feature maps 각각에서 하나의 anchor box에 할당됨
+            # ! 반복 결과, 하나의 이미지에 존재하는 모든 gt_bbox는 세 가지 scale의 feature maps 각각에서 하나의 anchor box에 할당됨
 
         # ! image          = (3, 416, 416) -> 입력 이미지
         # ! tuple(targets) = ([3, 13, 13, 6], [3, 26, 26, 6], [3, 52, 52, 6])
         # ! -> 3개의 서로 다른 scale의 feature maps와 각각의 서로 다른 종류(3개)의 anchor boxes에 대해,
-        # ! -> 모든 feature maps(grid cell) positions에서의 예측 targets가
+        # ! -> 모든 feature maps(grid cell) positions에서의 gt targets가
         # ! -> (confidence, x, y, w, h, class)의 형태로 저장되어 있음
 
         return image, tuple(targets)

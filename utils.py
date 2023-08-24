@@ -430,7 +430,7 @@ def get_evaluation_bboxes(
                 threshold=threshold,
                 box_format=box_format,
             )
-            # ! NMS 이후 n개의 예측값이 남았다고 가정
+            # ! NMS 이후 p개의 예측값이 남았다고 가정
             # ! nms_boxes = (p, 6)
 
             # ! p개의 예측 bboxes에 train_idx를 패딩하고 저장함
@@ -451,7 +451,7 @@ def get_evaluation_bboxes(
 
     model.train()
 
-    # ! 모든 Q개의 이미지 마다 p개의 예측값, t개의 gt label이 저장되었다고 가정함
+    # ! 모든 Q개의 이미지마다 p개의 예측값, t개의 gt label이 저장되었다고 가정함
     # ! 최종적으로 모든 Q개의 images에 대한 예측값, gt label이 (train_idx, class label, confidence score, x, y, w, h)의 형태로 출력됨
     # ! 이때 train_idx는 예측 혹은 gt label이 속하는 이미지의 index임
     # ! all_pred_boxes = (Qp, 7)
@@ -592,7 +592,6 @@ def check_class_accuracy(model, loader, threshold):
             # ! object가 할당된 anchor boxes의 수 = 전체 예측 수
             tot_class_preds += torch.sum(obj)
 
-            0.05
             # ! Confidence score에 대한 예측 정확도 계산
             # ! 예측된 confidence score 식별
             # ! 만약 예측된 confidence score가 특정 threshold(0.05)보다 크면 object가 존재한다고 예측한 것으로 판별 (obj_preds = True)
