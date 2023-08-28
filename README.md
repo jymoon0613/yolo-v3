@@ -6,6 +6,8 @@
 
 To see my review comments, you need to add the ***Better Comments*** extension in VS Code.
 
+The review comments were written in Korean.
+
 This code was pulled from [here](https://github.com/aladdinpersson/Machine-Learning-Collection).
 
 The README for the original repository is below:
